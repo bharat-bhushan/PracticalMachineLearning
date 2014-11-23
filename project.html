@@ -1,0 +1,156 @@
+<html>
+
+<head>
+<title>Coursera: Practical Machine Learning Project</title>
+</head>
+
+<body>
+<h2>Problem Statement:</h2>
+<p>Prediction of quality of barbell lifts</p>
+<h2>Data:</h2>
+<p>Two data sets are given
+<p><a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv">Training Data</a></p>
+<p><a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv">Testing Data</a></p>
+</p>
+<h3>Data Loading and Features Extraction</h3>
+We start the data loading procedure by specifying the data sources and destinations.
+<pre class="r"><code>
+training.file <- 'pml-training.csv'
+test.file     <- 'pml-test.csv'
+training.url  <- 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
+test.url      <- 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+download.file(training.url, training.file, method='wget')
+download.file(test.url,test.file,method='wget')
+</code></pre>
+We then execute the downloads.
+<pre class="r"><code>
+download.file(training.url, training.file, method='wget')
+download.file(test.url,test.file,method='wget')
+</code></pre>
+We have created a function to read data and set NAs and apply this to both training and test datasets.
+<pre class="r"><code>
+read.data<- function(x) {read.csv(x, na.strings = c("", "NA", "#DIV/0!"))}
+training<- read.data(training.file)
+test<- read.data(test.file)
+</code></pre>
+We then remove the variables not required for the prediction. These are index, time stamp variables and window variables.
+<pre class="r"><code>
+training<- training[,-c(1,3,4,5,6,7)]
+test<- test[,-c(1,3,4,5,6,7,160)]
+</code></pre>
+<h3>Data Partition for Cross Validation</h3>
+Using caret package we further split the training set into trainData and testData
+<pre class="r"><code>
+library(caret)
+inTrain<-createDataPartition(training$classe, p=.50, list=FALSE)
+training.train<-training[ inTrain,]
+training.test<-training[-inTrain,]
+</code></pre>
+Next we have created a function to remove entire NA columns, and apply it to both data frames. Then we create a function that removes any variables with missing NAs and apply this to the training set (both partitions train and test.
+<pre class="r"><code>
+rm.na.cols<- function(x) { x[ , colSums( is.na(x) ) < nrow(x) ]}
+training.train <- rm.na.cols(training.train)
+training.test  <- rm.na.cols(training.test)
+complete<- function(x) {x[,sapply(x, function(y) !any(is.na(y)))] }
+incompl<- function(x) {names( x[,sapply(x, function(y) any(is.na(y)))] ) }
+trtr.na.var<- incompl(training.train)
+trts.na.var<- incompl(training.test)
+training.train<- complete(training.train)
+training.test<- complete(training.test)
+</code></pre>
+<h3>Model</h3>
+We have used Random Forest method to build the model 
+<pre class="r"><code>
+modFit<-train(classe~.,training.train,method='rf')
+</code></pre>
+<h3>Model Characteristics</h3>
+<pre class="r"><code>
+summary(random.forest)
+                Length Class      Mode     
+call                4  -none-     call     
+type                1  -none-     character
+predicted        9812  factor     numeric  
+err.rate         3000  -none-     numeric  
+confusion          30  -none-     numeric  
+votes           49060  matrix     numeric  
+oob.times        9812  -none-     numeric  
+classes             5  -none-     character
+importance         57  -none-     numeric  
+importanceSD        0  -none-     NULL     
+localImportance     0  -none-     NULL     
+proximity           0  -none-     NULL     
+ntree               1  -none-     numeric  
+mtry                1  -none-     numeric  
+forest             14  -none-     list     
+y                9812  factor     numeric  
+test                0  -none-     NULL     
+inbag               0  -none-     NULL     
+xNames             57  -none-     character
+problemType         1  -none-     character
+tuneValue           1  data.frame list     
+obsLevels           5  -none-     character
+</code></pre>
+
+<h3>Cross Validation</h3>
+To cross validates we apply the model on testData
+<pre class="r"><code>
+confusionMatrix(predict(modFit,newdata=training.test[,-54]),training.test$classe)
+Confusion Matrix and Statistics
+
+          Reference
+Prediction    A    B    C    D    E
+         A 2782   17    0    0    0
+         B    6 1868   11    1    0
+         C    2   12 1690   31    4
+         D    0    1   10 1571   12
+         E    0    0    0    5 1787
+
+Overall Statistics
+                                          
+               Accuracy : 0.9886          
+                 95% CI : (0.9863, 0.9906)
+    No Information Rate : 0.2844          
+    P-Value [Acc > NIR] : < 2.2e-16       
+                                          
+                  Kappa : 0.9856          
+ Mcnemar''s Test P-Value : NA              
+
+Statistics by Class:
+
+                     Class: A Class: B Class: C Class: D Class: E
+Sensitivity            0.9971   0.9842   0.9877   0.9770   0.9911
+Specificity            0.9976   0.9977   0.9939   0.9972   0.9994
+Pos Pred Value         0.9939   0.9905   0.9718   0.9856   0.9972
+Neg Pred Value         0.9989   0.9962   0.9974   0.9955   0.9980
+Prevalence             0.2844   0.1935   0.1744   0.1639   0.1838
+Detection Rate         0.2836   0.1904   0.1723   0.1601   0.1822
+Detection Prevalence   0.2853   0.1923   0.1773   0.1625   0.1827
+Balanced Accuracy      0.9974   0.9910   0.9908   0.9871   0.9953
+</code></pre>
+
+<h3>Out of Sample Error</h3>
+The Kappa statistic of 0.9856 reflects the out of sample error.
+
+<h3>Prediction</h3>
+Now we apply the model on test data and predict the classe for 20 records
+<pre class="r"><code>
+predictions <- as.character(predict(modFit,newdata=test))
+print(predictions)
+ [1] "B" "A" "B" "A" "A" "E" "D" "B" "A" "A" "B" "C" "B" "A" "E" "E" "A" "B" "B" "B"
+</code></pre>
+
+
+<h3>Submission</h3>
+Using the funtion given in the instruction of submission section  we generate file for each of the 20 records.
+<pre class="r"><code>
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(predictions)
+</code></pre>
+</body>
+</html>
